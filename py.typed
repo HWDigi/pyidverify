@@ -1,0 +1,12 @@
+# Marker file for PEP 561 - Inline Type Information
+# This file indicates that the pyidverify package provides type information
+# and supports static type checking with tools like mypy, pyright, and pylance.
+
+# The presence of this file tells type checkers that:
+# 1. This package contains type annotations
+# 2. Type information should be used during static analysis
+# 3. The package follows PEP 484, 526, 544, and other typing PEPs
+
+# For more information:
+# - PEP 561: https://www.python.org/dev/peps/pep-0561/
+# - Python typing documentation: https://docs.python.org/3/library/typing.html

@@ -1,0 +1,77 @@
+# PyIDVerify Package Data Manifest
+# Specifies additional files to include in the distribution package
+
+# Include all package data
+graft pyidverify
+
+# Include documentation
+include README.md
+include LICENSE
+include CHANGELOG.md
+include SECURITY.md
+include VERSION
+include py.typed
+
+# Include configuration files
+include pyproject.toml
+include requirements.txt
+include requirements-dev.txt
+
+# Include example files
+graft examples
+prune examples/__pycache__
+prune examples/*.pyc
+
+# Include test data (but not test code in distribution)
+include tests/data/*.json
+include tests/data/*.yaml
+include tests/data/*.csv
+
+# Include documentation source
+graft docs
+prune docs/_build
+prune docs/__pycache__
+
+# Include CI/CD configuration
+include .github/workflows/*.yml
+include .pre-commit-config.yaml
+
+# Exclude development and build artifacts
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *$py.class
+global-exclude *.so
+global-exclude .DS_Store
+global-exclude .coverage
+global-exclude .pytest_cache
+global-exclude .mypy_cache
+global-exclude .tox
+global-exclude .venv
+global-exclude venv
+global-exclude build
+global-exclude dist
+global-exclude *.egg-info
+
+# Exclude IDE files
+global-exclude .vscode
+global-exclude .idea
+global-exclude *.swp
+global-exclude *.swo
+global-exclude *~
+
+# Exclude OS files
+global-exclude Thumbs.db
+global-exclude .DS_Store
+
+# Exclude temporary files
+global-exclude *.tmp
+global-exclude *.temp
+global-exclude *.log
+
+# Security: Exclude any potential sensitive files
+global-exclude *.key
+global-exclude *.pem
+global-exclude *.p12
+global-exclude secrets.json
+global-exclude .env
+global-exclude .env.*

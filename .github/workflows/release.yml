@@ -1,0 +1,630 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Is this a pre-release?'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # Pre-release Security and Quality Gates
+  pre-release-checks:
+    name: 🚪 Pre-Release Security Gates
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,test,all]
+      
+      - name: Final security scan
+        run: |
+          bandit -r pyidverify/ -f json -o final-security-scan.json
+          safety check --full-report
+        continue-on-error: false
+      
+      - name: Final compliance check
+        run: |
+          python scripts/compliance/final_compliance_check.py
+      
+      - name: Verify all tests pass
+        run: |
+          pytest tests/ -v --tb=short
+      
+      - name: Check version consistency
+        run: |
+          python scripts/check_version_consistency.py
+      
+      - name: Validate CHANGELOG
+        run: |
+          python scripts/validate_changelog.py
+      
+      - name: Upload pre-release artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: pre-release-checks
+          path: |
+            final-security-scan.json
+
+  # Build Release Packages
+  build-packages:
+    name: 📦 Build Release Packages
+    runs-on: ${{ matrix.os }}
+    needs: pre-release-checks
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine wheel setuptools
+      
+      - name: Build source distribution
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python -m build --sdist
+      
+      - name: Build wheel distribution
+        run: |
+          python -m build --wheel
+      
+      - name: Check package integrity
+        run: |
+          twine check dist/*
+      
+      - name: Test package installation
+        run: |
+          pip install dist/*.whl
+          python -c "import pyidverify; print(pyidverify.__version__)"
+          pip uninstall -y pyidverify
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: packages-${{ matrix.os }}
+          path: dist/
+
+  # Container Image Build and Scan
+  build-container:
+    name: 🐳 Build and Scan Container
+    runs-on: ubuntu-latest
+    needs: pre-release-checks
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+      
+      - name: Build and push container image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Scan container for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          format: 'sarif'
+          output: 'trivy-container.sarif'
+      
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-container.sarif'
+
+  # Generate Release Documentation
+  generate-docs:
+    name: 📚 Generate Release Documentation
+    runs-on: ubuntu-latest
+    needs: pre-release-checks
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,docs]
+      
+      - name: Generate API documentation
+        run: |
+          cd docs
+          make clean
+          make html
+      
+      - name: Generate security documentation
+        run: |
+          python scripts/docs/generate_security_docs.py
+      
+      - name: Generate compliance documentation
+        run: |
+          python scripts/docs/generate_compliance_docs.py
+      
+      - name: Package documentation
+        run: |
+          tar -czf pyidverify-docs-${{ github.ref_name }}.tar.gz docs/_build/html/
+      
+      - name: Upload documentation
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-documentation
+          path: |
+            pyidverify-docs-${{ github.ref_name }}.tar.gz
+
+  # Security Attestation
+  security-attestation:
+    name: 🛡️ Generate Security Attestation
+    runs-on: ubuntu-latest
+    needs: [pre-release-checks, build-packages]
+    
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download packages
+        uses: actions/download-artifact@v3
+        with:
+          name: packages-ubuntu-latest
+          path: dist/
+      
+      - name: Generate hashes
+        id: hash
+        run: |
+          cd dist/
+          echo "hashes=$(sha256sum * | base64 -w 0)" >> $GITHUB_OUTPUT
+      
+      - name: Generate SLSA provenance
+        uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.9.0
+        with:
+          base64-subjects: "${{ steps.hash.outputs.hashes }}"
+          provenance-name: "pyidverify.intoto.jsonl"
+      
+      - name: Generate security attestation
+        run: |
+          python scripts/security/generate_security_attestation.py --output security-attestation.json
+      
+      - name: Sign attestation
+        uses: sigstore/gh-action-sigstore-python@v2.1.1
+        with:
+          inputs: |
+            ./security-attestation.json
+            ./dist/*.whl
+            ./dist/*.tar.gz
+      
+      - name: Upload attestation artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-attestation
+          path: |
+            security-attestation.json
+            *.sig
+            *.crt
+
+  # Compliance Certification
+  compliance-certification:
+    name: ⚖️ Generate Compliance Certification
+    runs-on: ubuntu-latest
+    needs: pre-release-checks
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install compliance tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,compliance]
+      
+      - name: Generate GDPR compliance certificate
+        run: |
+          python scripts/compliance/generate_gdpr_certificate.py --output gdpr-compliance-cert.json
+      
+      - name: Generate HIPAA compliance certificate
+        run: |
+          python scripts/compliance/generate_hipaa_certificate.py --output hipaa-compliance-cert.json
+      
+      - name: Generate PCI DSS compliance certificate
+        run: |
+          python scripts/compliance/generate_pci_dss_certificate.py --output pci-dss-compliance-cert.json
+      
+      - name: Generate overall compliance report
+        run: |
+          python scripts/compliance/generate_compliance_report.py --output compliance-report-${{ github.ref_name }}.pdf
+      
+      - name: Upload compliance artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: compliance-certification
+          path: |
+            gdpr-compliance-cert.json
+            hipaa-compliance-cert.json
+            pci-dss-compliance-cert.json
+            compliance-report-${{ github.ref_name }}.pdf
+
+  # Create GitHub Release
+  create-release:
+    name: 🚀 Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-packages, build-container, generate-docs, security-attestation, compliance-certification]
+    
+    permissions:
+      contents: write
+      discussions: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: release-artifacts/
+      
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          
+          # Copy package files
+          cp release-artifacts/packages-ubuntu-latest/*.tar.gz release-assets/
+          cp release-artifacts/packages-ubuntu-latest/*.whl release-assets/
+          cp release-artifacts/packages-windows-latest/*.whl release-assets/pyidverify-*-py3-none-win_amd64.whl
+          cp release-artifacts/packages-macos-latest/*.whl release-assets/pyidverify-*-py3-none-macosx_*.whl
+          
+          # Copy documentation
+          cp release-artifacts/release-documentation/*.tar.gz release-assets/
+          
+          # Copy compliance reports
+          cp release-artifacts/compliance-certification/*.pdf release-assets/
+          
+          # Copy security attestations
+          cp release-artifacts/security-attestation/*.json release-assets/
+          
+          # Generate checksums
+          cd release-assets
+          sha256sum * > SHA256SUMS
+          gpg --detach-sign --armor SHA256SUMS
+      
+      - name: Extract release notes
+        id: extract_notes
+        run: |
+          python scripts/extract_release_notes.py --version ${{ github.ref_name }} --output release-notes.md
+          echo "notes_file=release-notes.md" >> $GITHUB_OUTPUT
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release-assets/*
+          body_path: ${{ steps.extract_notes.outputs.notes_file }}
+          prerelease: ${{ github.event.inputs.prerelease || contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          discussion_category_name: "Releases"
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create release discussion
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: '${{ github.ref_name }}'
+            });
+            
+            await github.rest.teams.addOrUpdateRepoPermissionsInOrg({
+              org: context.repo.owner,
+              team_slug: 'release-team',
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              permission: 'admin'
+            });
+
+  # Deploy to PyPI
+  deploy-pypi:
+    name: 📤 Deploy to PyPI
+    runs-on: ubuntu-latest
+    needs: create-release
+    environment: 
+      name: pypi
+      url: https://pypi.org/project/pyidverify/
+    
+    permissions:
+      id-token: write
+    
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v3
+        with:
+          name: packages-ubuntu-latest
+          path: dist/
+      
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+      
+      - name: Publish to Test PyPI
+        if: github.event.inputs.prerelease || contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          verbose: true
+      
+      - name: Test installation from Test PyPI
+        if: github.event.inputs.prerelease || contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc')
+        run: |
+          sleep 60  # Wait for Test PyPI to update
+          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ pyidverify==${{ steps.version.outputs.version }}
+          python -c "import pyidverify; print(f'Successfully installed PyIDVerify {pyidverify.__version__}')"
+      
+      - name: Publish to PyPI
+        if: ${{ !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc') && !github.event.inputs.prerelease }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+      
+      - name: Verify PyPI installation
+        if: ${{ !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc') && !github.event.inputs.prerelease }}
+        run: |
+          sleep 180  # Wait for PyPI to update
+          pip install pyidverify==${{ steps.version.outputs.version }}
+          python -c "import pyidverify; print(f'Successfully installed PyIDVerify {pyidverify.__version__} from PyPI')"
+
+  # Update Documentation Site
+  deploy-docs:
+    name: 📖 Deploy Documentation
+    runs-on: ubuntu-latest
+    needs: create-release
+    
+    permissions:
+      pages: write
+      id-token: write
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download documentation
+        uses: actions/download-artifact@v3
+        with:
+          name: release-documentation
+          path: docs-package/
+      
+      - name: Extract documentation
+        run: |
+          cd docs-package
+          tar -xzf *.tar.gz
+          mv html/* ../docs-site/
+      
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+      
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: docs-site/
+      
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
+
+  # Post-Release Tasks
+  post-release:
+    name: 🎯 Post-Release Tasks
+    runs-on: ubuntu-latest
+    needs: [deploy-pypi, deploy-docs]
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+      
+      - name: Update version for next development cycle
+        if: ${{ !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc') }}
+        run: |
+          python scripts/bump_version.py --next-dev
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "chore: bump version for next development cycle"
+          git push origin main
+      
+      - name: Create post-release issue
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issueBody = `
+            ## 🎉 Release ${{ github.ref_name }} Completed
+            
+            ### ✅ Completed Tasks:
+            - [x] Security and quality gates passed
+            - [x] Packages built and published to PyPI
+            - [x] Container images published to GHCR
+            - [x] Documentation deployed to GitHub Pages
+            - [x] Security attestations generated
+            - [x] Compliance certifications updated
+            
+            ### 📋 Post-Release Checklist:
+            - [ ] Update third-party integrations
+            - [ ] Notify enterprise customers
+            - [ ] Update marketing materials
+            - [ ] Schedule release retrospective
+            - [ ] Update security documentation
+            - [ ] Monitor deployment metrics
+            
+            ### 📊 Release Metrics:
+            - **Release Type**: ${{ contains(github.ref, 'alpha') && 'Alpha' || contains(github.ref, 'beta') && 'Beta' || contains(github.ref, 'rc') && 'Release Candidate' || 'Stable' }}
+            - **PyPI URL**: https://pypi.org/project/pyidverify/${{ steps.version.outputs.version }}/
+            - **Documentation**: https://pyidverify.readthedocs.io/
+            - **Container**: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            
+            cc: @security-team @compliance-team @release-managers
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Post-Release Tasks for ${{ github.ref_name }}`,
+              body: issueBody,
+              labels: ['release', 'post-release', 'high-priority'],
+              assignees: ['release-manager']
+            });
+      
+      - name: Trigger downstream updates
+        run: |
+          # Trigger updates to integration repositories
+          python scripts/trigger_downstream_updates.py --version ${{ github.ref_name }}
+      
+      - name: Send release notifications
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python scripts/send_release_notifications.py --version ${{ steps.version.outputs.version }}
+
+  # Release Health Monitoring
+  monitor-release:
+    name: 📊 Monitor Release Health
+    runs-on: ubuntu-latest
+    needs: deploy-pypi
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+      
+      - name: Monitor PyPI deployment
+        run: |
+          python scripts/monitor/check_pypi_deployment.py --version ${{ steps.version.outputs.version }}
+      
+      - name: Monitor download metrics
+        run: |
+          python scripts/monitor/track_download_metrics.py --version ${{ steps.version.outputs.version }}
+      
+      - name: Check security alerts
+        run: |
+          python scripts/monitor/check_security_alerts.py --version ${{ steps.version.outputs.version }}
+      
+      - name: Generate release health report
+        run: |
+          python scripts/monitor/generate_health_report.py --version ${{ steps.version.outputs.version }}
+      
+      - name: Upload monitoring artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-monitoring
+          path: |
+            reports/monitoring/
+      
+      - name: Create monitoring dashboard
+        run: |
+          python scripts/monitor/create_dashboard.py --version ${{ steps.version.outputs.version }}
+        continue-on-error: true

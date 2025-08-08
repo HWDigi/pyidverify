@@ -1,0 +1,118 @@
+# PyIDVerify - Development Dependencies
+# Development tools, testing frameworks, and code quality tools
+
+# ============================================================================
+# TESTING FRAMEWORK
+# ============================================================================
+pytest>=7.0.0                # Modern testing framework
+pytest-asyncio>=0.21.0       # Async/await testing support
+pytest-cov>=4.0.0            # Code coverage reporting
+pytest-xdist>=3.0.0          # Parallel test execution
+pytest-mock>=3.10.0          # Mocking utilities
+hypothesis>=6.70.0           # Property-based testing
+faker>=18.0.0                # Test data generation
+
+# ============================================================================
+# CODE QUALITY AND FORMATTING
+# ============================================================================
+black>=23.0.0                # Code formatting (PEP 8 compliant)
+isort>=5.12.0                # Import statement sorting
+flake8>=6.0.0                # Code linting and style checking
+mypy>=1.0.0                  # Static type checking
+pre-commit>=3.0.0            # Git hooks for code quality
+ruff>=0.0.270                # Fast Python linter (Rust-based)
+
+# ============================================================================
+# SECURITY ANALYSIS
+# ============================================================================
+bandit>=1.7.0                # Security vulnerability scanning
+safety>=2.3.0                # Dependency vulnerability checking  
+semgrep>=1.0.0               # Advanced static analysis
+
+# ============================================================================
+# DOCUMENTATION
+# ============================================================================
+sphinx>=7.0.0                # Documentation generation
+sphinx-rtd-theme>=1.3.0      # Read the Docs theme
+sphinx-autodoc-typehints>=1.23.0  # Type hints in docs
+myst-parser>=2.0.0           # Markdown support in Sphinx
+sphinx-copybutton>=0.5.0     # Copy button for code blocks
+
+# ============================================================================
+# BUILD AND PACKAGING
+# ============================================================================
+build>=0.10.0                # PEP 517 build tool
+twine>=4.0.0                 # Package uploading to PyPI
+wheel>=0.40.0                # Wheel package format
+hatchling>=1.5.0             # Modern build backend
+
+# ============================================================================
+# PERFORMANCE AND PROFILING
+# ============================================================================
+memory-profiler>=0.60.0      # Memory usage profiling
+py-spy>=0.3.14               # Sampling profiler
+line-profiler>=4.0.0         # Line-by-line profiling
+
+# ============================================================================
+# DEBUGGING AND DEVELOPMENT
+# ============================================================================
+ipdb>=0.13.13                # Enhanced debugger
+rich>=13.0.0                 # Beautiful terminal output
+click>=8.1.0                 # CLI framework
+tox>=4.0.0                   # Testing across Python versions
+
+# ============================================================================
+# JUPYTER AND NOTEBOOKS (Optional)
+# ============================================================================
+jupyter>=1.0.0               # Jupyter notebook environment
+notebook>=6.5.0              # Jupyter notebook server
+ipykernel>=6.22.0            # IPython kernel for Jupyter
+
+# ============================================================================
+# MACHINE LEARNING DEVELOPMENT (Optional)
+# ============================================================================
+scikit-learn>=1.3.0          # Machine learning library
+numpy>=1.24.0                # Numerical computing
+pandas>=2.0.0                # Data manipulation and analysis
+matplotlib>=3.7.0            # Plotting and visualization
+
+# ============================================================================
+# API AND WEB TESTING
+# ============================================================================
+responses>=0.23.0            # HTTP request mocking
+httpx>=0.24.0                # Async HTTP client
+respx>=0.20.0                # HTTPX request mocking
+
+# ============================================================================
+# DATABASE TESTING
+# ============================================================================
+pytest-postgresql>=5.0.0     # PostgreSQL testing
+pytest-redis>=3.0.0          # Redis testing
+sqlalchemy>=2.0.0            # Database ORM
+
+# ============================================================================
+# CONCURRENT AND ASYNC TESTING
+# ============================================================================
+aiofiles>=23.0.0             # Async file I/O
+asyncio-mqtt>=0.13.0         # Async MQTT client
+trio>=0.22.0                 # Async I/O library
+
+# ============================================================================
+# INSTALL INSTRUCTIONS
+# ============================================================================
+# Install development dependencies:
+# pip install -r requirements-dev.txt
+#
+# Or install with the dev extra:
+# pip install -e .[dev]
+#
+# Set up pre-commit hooks:
+# pre-commit install
+#
+# Run tests with coverage:
+# pytest --cov=pyidverify --cov-report=html
+#
+# Run security scans:
+# bandit -r pyidverify/
+# safety check
+# semgrep --config=auto pyidverify/

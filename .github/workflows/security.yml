@@ -1,0 +1,514 @@
+name: Security Audit
+
+on:
+  schedule:
+    # Run comprehensive security audit weekly on Sundays at 3 AM UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of security scan to run'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - dependencies
+          - code
+          - containers
+          - compliance
+
+env:
+  SECURITY_LEVEL: 'maximum'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # Comprehensive Dependency Security Audit
+  dependency-audit:
+    name: 🔍 Dependency Security Audit
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'dependencies' || github.event_name == 'schedule'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install audit tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit safety cyclonedx-bom
+      
+      - name: Generate Software Bill of Materials (SBOM)
+        run: |
+          pip install -e .[all]
+          cyclonedx-py -o sbom.json
+      
+      - name: Comprehensive dependency audit with pip-audit
+        run: |
+          pip-audit --format=json --output=pip-audit-full.json --desc
+          pip-audit --format=sarif --output=pip-audit.sarif --desc
+        continue-on-error: true
+      
+      - name: Safety vulnerability scan
+        run: |
+          safety check --full-report --json --output safety-full.json
+        continue-on-error: true
+      
+      - name: Snyk dependency scan
+        uses: snyk/actions/python@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=medium --json-file-output=snyk-dependencies.json
+        continue-on-error: true
+      
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: pip-audit.sarif
+      
+      - name: Upload audit artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: dependency-audit
+          path: |
+            sbom.json
+            pip-audit-full.json
+            safety-full.json
+            snyk-dependencies.json
+
+  # Advanced Static Code Security Analysis
+  code-security-audit:
+    name: 🔬 Advanced Code Security Analysis
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'code' || github.event_name == 'schedule'
+    
+    permissions:
+      security-events: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install analysis tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit[toml] semgrep dlint safety
+          pip install -e .[dev,test]
+      
+      - name: Bandit security analysis
+        run: |
+          bandit -r pyidverify/ -f json -o bandit-detailed.json
+          bandit -r pyidverify/ -f sarif -o bandit.sarif
+        continue-on-error: true
+      
+      - name: Semgrep comprehensive security scan
+        run: |
+          semgrep --config=auto --json --output=semgrep-results.json pyidverify/
+          semgrep --config=auto --sarif --output=semgrep.sarif pyidverify/
+        continue-on-error: true
+      
+      - name: DLint security linter
+        run: |
+          python -m dlint pyidverify/ --json --output dlint-results.json
+        continue-on-error: true
+      
+      - name: CodeQL Analysis
+        uses: github/codeql-action/init@v2
+        with:
+          languages: python
+          queries: security-extended
+      
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+      
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: |
+            bandit.sarif
+            semgrep.sarif
+      
+      - name: Upload code audit artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: code-security-audit
+          path: |
+            bandit-detailed.json
+            semgrep-results.json
+            dlint-results.json
+
+  # Container and Infrastructure Security
+  container-security-audit:
+    name: 🐳 Container Security Audit
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'containers' || github.event_name == 'schedule'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build Docker image
+        run: |
+          docker build -t pyidverify:security-audit .
+      
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-fs.sarif'
+      
+      - name: Trivy container image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'pyidverify:security-audit'
+          format: 'sarif'
+          output: 'trivy-image.sarif'
+      
+      - name: Snyk container scan
+        uses: snyk/actions/docker@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: 'pyidverify:security-audit'
+          args: --severity-threshold=medium --json-file-output=snyk-container.json
+        continue-on-error: true
+      
+      - name: Docker Scout vulnerability scan
+        uses: docker/scout-action@v1
+        if: github.event_name == 'schedule'
+        with:
+          command: cves
+          image: pyidverify:security-audit
+          sarif-file: scout.sarif
+          summary: true
+        continue-on-error: true
+      
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: |
+            trivy-fs.sarif
+            trivy-image.sarif
+            scout.sarif
+      
+      - name: Upload container audit artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: container-security-audit
+          path: |
+            snyk-container.json
+
+  # Compliance and Regulatory Audit
+  compliance-audit:
+    name: ⚖️ Compliance Audit
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'compliance' || github.event_name == 'schedule'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install compliance tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,test,compliance]
+      
+      - name: GDPR compliance audit
+        run: |
+          python scripts/compliance/gdpr_audit.py --output gdpr-audit.json
+        continue-on-error: true
+      
+      - name: HIPAA compliance audit
+        run: |
+          python scripts/compliance/hipaa_audit.py --output hipaa-audit.json
+        continue-on-error: true
+      
+      - name: PCI DSS compliance audit
+        run: |
+          python scripts/compliance/pci_dss_audit.py --output pci-dss-audit.json
+        continue-on-error: true
+      
+      - name: SOX compliance audit
+        run: |
+          python scripts/compliance/sox_audit.py --output sox-audit.json
+        continue-on-error: true
+      
+      - name: Cryptographic compliance audit
+        run: |
+          python scripts/compliance/crypto_audit.py --output crypto-audit.json
+        continue-on-error: true
+      
+      - name: Generate compliance dashboard
+        run: |
+          python scripts/compliance/generate_dashboard.py
+      
+      - name: Upload compliance artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: compliance-audit
+          path: |
+            gdpr-audit.json
+            hipaa-audit.json
+            pci-dss-audit.json
+            sox-audit.json
+            crypto-audit.json
+            compliance-dashboard.html
+
+  # Secrets and Credential Scanning
+  secrets-audit:
+    name: 🔐 Secrets and Credentials Audit
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event_name == 'schedule'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: GitLeaks secret scanner
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: TruffleHog secret scanner
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+      
+      - name: Semgrep secrets scan
+        run: |
+          docker run --rm -v "${PWD}:/src" returntocorp/semgrep \
+            --config=p/secrets --json --output=/src/semgrep-secrets.json /src
+        continue-on-error: true
+      
+      - name: Upload secrets audit artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: secrets-audit
+          path: |
+            semgrep-secrets.json
+
+  # Penetration Testing Simulation
+  penetration-testing:
+    name: 🎯 Penetration Testing
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event_name == 'schedule'
+    
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install testing framework
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,test,all]
+      
+      - name: SQL injection testing
+        run: |
+          python tests/security/test_sql_injection.py
+        continue-on-error: true
+      
+      - name: XSS vulnerability testing
+        run: |
+          python tests/security/test_xss_prevention.py
+        continue-on-error: true
+      
+      - name: Authentication bypass testing
+        run: |
+          python tests/security/test_auth_bypass.py
+        continue-on-error: true
+      
+      - name: Timing attack resistance testing
+        run: |
+          python tests/security/test_timing_attacks.py
+        continue-on-error: true
+      
+      - name: Cryptographic implementation testing
+        run: |
+          python tests/security/test_crypto_implementation.py
+        continue-on-error: true
+      
+      - name: Generate penetration testing report
+        run: |
+          python scripts/security/generate_pentest_report.py
+      
+      - name: Upload penetration testing artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: penetration-testing
+          path: |
+            reports/security/pentest-report.html
+            reports/security/pentest-summary.json
+
+  # Security Metrics and Reporting
+  security-reporting:
+    name: 📊 Security Metrics and Reporting
+    runs-on: ubuntu-latest
+    needs: [dependency-audit, code-security-audit, container-security-audit, compliance-audit, secrets-audit, penetration-testing]
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Download all audit artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: audit-results/
+      
+      - name: Install reporting tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install jinja2 matplotlib seaborn pandas
+      
+      - name: Generate security dashboard
+        run: |
+          python scripts/security/generate_security_dashboard.py --input audit-results/ --output security-dashboard.html
+      
+      - name: Calculate security score
+        run: |
+          python scripts/security/calculate_security_score.py --input audit-results/ --output security-score.json
+      
+      - name: Generate executive summary
+        run: |
+          python scripts/security/generate_executive_summary.py --input audit-results/ --output executive-summary.pdf
+      
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-reports
+          path: |
+            security-dashboard.html
+            security-score.json
+            executive-summary.pdf
+      
+      - name: Comment security summary on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const securityScore = JSON.parse(fs.readFileSync('security-score.json', 'utf8'));
+            
+            const comment = `## 🔒 Security Audit Summary
+            
+            **Overall Security Score**: ${securityScore.overall_score}/100
+            
+            ### 📊 Results by Category:
+            - **Dependencies**: ${securityScore.dependencies}/100
+            - **Code Security**: ${securityScore.code_security}/100
+            - **Container Security**: ${securityScore.container_security}/100
+            - **Compliance**: ${securityScore.compliance}/100
+            
+            ### 🚨 Critical Issues: ${securityScore.critical_issues}
+            ### ⚠️ High Issues: ${securityScore.high_issues}
+            ### ℹ️ Medium Issues: ${securityScore.medium_issues}
+            
+            [View detailed security dashboard](${context.payload.pull_request.html_url}/checks)
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+      
+      - name: Fail if critical security issues found
+        run: |
+          python -c "
+          import json
+          with open('security-score.json', 'r') as f:
+              score = json.load(f)
+          if score['critical_issues'] > 0:
+              print(f'CRITICAL: {score[\"critical_issues\"]} critical security issues found!')
+              exit(1)
+          if score['overall_score'] < 80:
+              print(f'WARNING: Security score ({score[\"overall_score\"]}) below threshold (80)')
+              exit(1)
+          print('✅ Security audit passed!')
+          "
+
+  # Incident Response Simulation
+  incident-response-drill:
+    name: 🚨 Incident Response Drill
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' && github.event.schedule == '0 3 * * 0'  # Weekly on Sunday
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Simulate security incident
+        run: |
+          echo "🚨 Simulating security incident for IR drill"
+          python scripts/security/simulate_incident.py --type data_breach
+      
+      - name: Test incident response procedures
+        run: |
+          python scripts/security/test_incident_response.py
+      
+      - name: Generate incident response report
+        run: |
+          python scripts/security/generate_ir_report.py
+      
+      - name: Upload incident response artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: incident-response-drill
+          path: |
+            reports/security/ir-drill-report.json

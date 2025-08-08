@@ -9,7 +9,7 @@ PyIDVerify handles sensitive personal identification data. All contributions mus
 ⚠️ **NEVER use real personal data in contributions**  
 ⚠️ **ALWAYS use test data generators provided by the library**  
 ⚠️ **FOLLOW security best practices for sensitive data handling**  
-⚠️ **REPORT security vulnerabilities privately to security@pyidverify.com**
+⚠️ **REPORT security vulnerabilities privately to HWDigi**
 
 ## 📋 **Table of Contents**
 
@@ -586,8 +586,7 @@ For security fixes:
 
 - **GitHub Discussions**: General questions and ideas
 - **GitHub Issues**: Bug reports and feature requests
-- **Security Email**: security@pyidverify.com
-- **Conduct Email**: conduct@pyidverify.com
+- **Conduct Email**: HWDigi
 
 ### Getting Help
 
@@ -607,10 +606,8 @@ We maintain a `CONTRIBUTORS.md` file to recognize all contributors:
 
 ## 📧 **Contact Information**
 
-- **General Questions**: maintainers@pyidverify.com
-- **Security Issues**: security@pyidverify.com
-- **Conduct Issues**: conduct@pyidverify.com
-- **Legal Questions**: legal@pyidverify.com
+- **General Questions**: HWDigi
+
 
 ## 📄 **Additional Resources**
 

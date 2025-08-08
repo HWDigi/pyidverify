@@ -43,7 +43,7 @@ Given the sensitive nature of ID verification and personal data handling in PyID
 * **Never share real personal data** in examples, issues, or pull requests
 * **Use only test data** when creating examples or reporting bugs
 * **Follow security best practices** when contributing code
-* **Report security vulnerabilities privately** to security@pyidverify.com
+* **Report security vulnerabilities privately** to the team at HWDigi
 * **Respect data privacy** and comply with applicable laws (GDPR, HIPAA, etc.)
 * **Document security implications** of any new features or changes
 
@@ -70,8 +70,7 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at
-conduct@pyidverify.com.
+reported to the community leaders responsible for enforcement within the team of HWDigi.
 
 All complaints will be reviewed and investigated promptly and fairly.
 
@@ -152,7 +151,7 @@ Contributors must:
 * **Never commit real personal data** to the repository
 * **Use proper test data generation** methods provided by the library
 * **Follow GDPR, HIPAA, and other applicable privacy regulations**
-* **Report any accidental data exposure** immediately to security@pyidverify.com
+* **Report any accidental data exposure** immediately to the team @ HWDigi
 
 ### Acceptable Test Data
 
@@ -171,13 +170,13 @@ Contributors must:
 ## Reporting Guidelines
 
 ### General Issues
-Report community issues to: conduct@pyidverify.com
+Report community issues to: @HWDigi
 
 ### Security Issues
-Report security vulnerabilities to: security@pyidverify.com
+Report security vulnerabilities to: @HWDigi
 
 ### Data Protection Issues  
-Report privacy/data concerns to: privacy@pyidverify.com
+Report privacy/data concerns to: @HWDigi
 
 All reports will be handled confidentially and investigated promptly.
 
@@ -199,10 +198,10 @@ sensitive nature of ID verification and personal data processing.
 
 ## Contact Information
 
-* **General Conduct**: conduct@pyidverify.com
-* **Security Issues**: security@pyidverify.com  
-* **Privacy Concerns**: privacy@pyidverify.com
-* **Legal Questions**: legal@pyidverify.com
+* **General Conduct**: @HWDigi
+* **Security Issues**: @HWDigi 
+* **Privacy Concerns**: @HWDigi
+* **Legal Questions**: @HWDigi
 
 For urgent security matters, you may also contact our security team via:
 * **PGP Key**: Available at https://pyidverify.com/security/pgp-key.asc

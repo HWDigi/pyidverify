@@ -7,7 +7,7 @@
 
 > **⚠️ DEVELOPMENT STATUS**: This project is currently in active development (v2.0.0-beta). While the core functionality is stable and tested, some features may be subject to change. Production use is supported with proper testing.
 
-**PyIDVerify** is a comprehensive, security-first Python library for validating and verifying identification numbers, personal identifiers, and sensitive data. With military-grade encryption and enterprise compliance features, it provides everything you need for secure ID verification in modern applications.
+**PyIDVerify** is a comprehensive, Python library for validating and verifying identification numbers, personal identifiers, and sensitive data. With encryption and enterprise compliance features, it provides everything you need for secure ID verification in modern applications.
 
 ## 🌟 What Makes PyIDVerify Special
 

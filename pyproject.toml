@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pyidverify"
-description = "Enterprise-grade ID verification library with military-level security"
+description = "ID Verification library"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
     {name = "PyIDVerify Team"},
 ]
 maintainers = [
-    {name = "PyIDVerify Team"},
+    {name = "HWDigi Team"},
 ]
 keywords = [
     "id-verification",

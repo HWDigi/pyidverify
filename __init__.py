@@ -1,7 +1,6 @@
 # PyIDVerify Package Structure
 __version__ = "2.0.0"
-__author__ = "PyIDVerify Security Team"
-__email__ = "security@pyidverify.com"
+__author__ = "HWDigi Team"
 __license__ = "MIT"
 
 # Import main validators for easy access

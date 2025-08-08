@@ -198,7 +198,8 @@ All contributions undergo security review:
 
 Found a security issue? **DO NOT** create a public issue.
 
-**Report privately to**: security@pyidverify.com
+**Report privately to**: HWDigi
+
 
 Include:
 - Description of the vulnerability

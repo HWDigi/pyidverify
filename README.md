@@ -1,4 +1,4 @@
-# � PyIDVerify - Enterprise-Grade ID Verification Library
+# � PyIDVerify - ID Verification Library (***In Development***)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
@@ -568,7 +568,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### Community Support
 - 💬 **GitHub Discussions**: Ask questions and share ideas
 - 🐛 **Issue Tracker**: Report bugs and request features
-- 📧 **Email**: security@pyidverify.com for security issues
+- 📧 **Email**: @HWDigi
 - 📖 **Documentation**: Comprehensive guides and API reference
 
 ### Enterprise Support
